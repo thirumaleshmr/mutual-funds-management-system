@@ -1,0 +1,12 @@
+#include<stdio.h>
+int main()
+{
+    char line[256];
+    FILE *ptr=fopen("Userlist.csv","w");
+    if(ptr==NULL)
+    {
+        printf("error");
+    }
+    fprintf(ptr,"USER_ID\t\tUSER_NAME\t\tPASSWORD\n");
+    fclose(ptr);
+}

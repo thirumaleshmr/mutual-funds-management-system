@@ -1,0 +1,585 @@
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+#include <time.h>
+
+#define max_users 50
+#define name_len 50
+#define password_len 15
+#define NUM_FUNDS 4
+#define MAX_LINE_LENGTH 256
+
+typedef struct
+{
+    int user_id;
+    char name[name_len];
+    char password[password_len];
+} user;
+
+typedef struct
+{
+    char name[50];
+    char ticker[5];
+    float oneYearReturn;
+    float threeYearReturn;
+    float fiveYearReturn;
+} MutualFund;
+
+// Add user
+
+void add_user(user *s, int *num_user)
+{
+    if (*num_user >= max_users)
+    {
+        printf("User limit reached.\n");
+        return;
+    }
+
+    // Load the existing users from file to check for duplicate names
+    FILE *file = fopen("Userlist.csv", "r");
+    if (file == NULL)
+    {
+        printf("Error opening user list file.\n");
+        return;
+    }
+
+    char line[MAX_LINE_LENGTH];
+    fgets(line, sizeof(line), file); // Skip header line
+
+    // Temporary array to hold existing user names
+    char existingNames[max_users][name_len];
+    int existingUserCount = 0;
+
+    // Read the existing users from the file
+    while (fgets(line, sizeof(line), file))
+    {
+        sscanf(line, "%*d,%49[^,],%*s", existingNames[existingUserCount]);
+        existingUserCount++;
+    }
+    fclose(file);
+
+    int uniqueName = 0;
+    while (!uniqueName)
+    {
+        uniqueName = 1;  // Assume the name is unique unless found otherwise
+
+        getchar(); // Consume any stray newline character
+        printf("Enter user_name: ");
+        fgets(s[*num_user].name, sizeof(s[*num_user].name), stdin);
+        s[*num_user].name[strcspn(s[*num_user].name, "\n")] = 0; // Remove newline
+
+        // Check if the entered name already exists
+        for (int i = 0; i < existingUserCount; i++)
+        {
+            if (strcmp(s[*num_user].name, existingNames[i]) == 0)
+            {
+                printf("The username '%s' already exists. Please choose a different name.\n", s[*num_user].name);
+                uniqueName = 0;
+                break;
+            }
+        }
+    }
+
+    // Get user password
+    printf("Enter Password: ");
+    fgets(s[*num_user].password, sizeof(s[*num_user].password), stdin);
+    s[*num_user].password[strcspn(s[*num_user].password, "\n")] = 0; // Remove newline
+
+    // Generate a unique user ID
+    int num;
+    srand(time(0));
+    num = rand() % 90000 + 100000;
+    s[*num_user].user_id = num;
+
+    (*num_user)++;
+
+    // Write to the main user list file
+    FILE *ptr = fopen("Userlist.csv", "w");
+    if (ptr == NULL)
+    {
+        printf("Error opening file");
+        return;
+    }
+    fprintf(ptr, "USER_ID,USER_NAME,PASSWORD\n"); // Write header
+    for (int i = 0; i < *num_user; i++)
+    {
+        fprintf(ptr, "%d,%s,%s\n", s[i].user_id, s[i].name, s[i].password);
+    }
+    fclose(ptr);
+
+    // Create a separate empty CSV file for the new user
+    char filename[100];
+    snprintf(filename, sizeof(filename), "%s.csv", s[*num_user - 1].name);
+
+    // Replace any invalid characters in filename with underscores
+    for (int i = 0; filename[i] != '\0'; i++)
+    {
+        if (filename[i] == ' ' || filename[i] == '/' || filename[i] == '\\')
+        {
+            filename[i] = '_';
+        }
+    }
+
+    FILE *userFile = fopen(filename, "w"); // Create an empty file
+    if (userFile == NULL)
+    {
+        printf("Error creating user file: %s\n", filename);
+        return;
+    }
+    fprintf(userFile, "STOCK_NAME,\t\t\t\tINVESTMENT,\t\tTIME,\t\tDATE\n");
+
+    fclose(userFile); // Close the file immediately to keep it empty
+
+    printf("\nUser added successfully. Empty file created: %s\n", filename);
+    printf("\n\n");
+}
+// View user list
+
+void user_list()
+{
+    FILE *ptr = fopen("Userlist.csv", "r");
+    if (ptr == NULL)
+    {
+        perror("Error opening file");
+        return;
+    }
+
+    char line[MAX_LINE_LENGTH];
+
+    // Read and skip the header line
+    if (fgets(line, sizeof(line), ptr) == NULL)
+    {
+        perror("Error reading header");
+        fclose(ptr);
+        return;
+    }
+
+    // Print header for user list
+    printf("User ID     User Name         \n");
+    printf("---------------------------------------------------\n");
+
+    // Read each line and print user details
+    while (fgets(line, sizeof(line), ptr))
+    {
+        int user_id;
+        char name[50];
+        char password[50];
+
+        if (sscanf(line, "%d,%49[^,],%49[^\n]", &user_id, name, password) == 3)
+        {
+            printf("%-10d  %-25s\n", user_id, name);
+        }
+        else
+        {
+            fprintf(stderr, "Error parsing line: %s", line);
+        }
+    }
+
+    fclose(ptr);
+    printf("\n\n");
+}
+
+// Remove user
+
+int removeUser(user *s, int *num_user, int user_id)
+{
+    int i, found = 0;
+
+    // Find the user with the given ID
+    for (i = 0; i < *num_user; i++)
+    {
+        if (s[i].user_id == user_id)
+        {
+            found = 1;
+            break;
+        }
+    }
+
+    if (!found)
+    {
+        printf("User with ID %d not found\n", user_id);
+        return -1;
+    }
+
+    // Shift elements to remove the user
+    for (int j = i; j < *num_user - 1; j++)
+    {
+        s[j] = s[j + 1];
+    }
+
+    (*num_user)--;
+
+    // Rewrite the file after removing the user
+    FILE *ptr = fopen("Userlist.csv", "w"); // Use "w" to overwrite the file
+    if (ptr == NULL)
+    {
+        perror("Error opening file for writing");
+        return -1;
+    }
+
+    fprintf(ptr, "USER_ID,USER_NAME,PASSWORD\n"); // Write header once
+    for (i = 0; i < *num_user; i++)
+    {
+        fprintf(ptr, "%d,%s,%s\n", s[i].user_id, s[i].name, s[i].password);
+    }
+
+    fclose(ptr);
+
+    printf("User with ID %d removed successfully\n", user_id);
+    
+    printf("\n\n");
+}
+
+// View Available Mutual Funds
+
+int ToviewMF(MutualFund *funds)
+{
+    FILE *ptr = fopen("mutualfunds.csv", "r");
+    if (ptr == NULL)
+    {
+        perror("Error opening file");
+        return 1;
+    }
+
+    char line[MAX_LINE_LENGTH];
+
+    // Skip the header line
+    if (fgets(line, sizeof(line), ptr) == NULL)
+    {
+        perror("Error reading header");
+        fclose(ptr);
+        return 1;
+    }
+
+    // Read each line of the CSV file
+    for (int i = 0; i < NUM_FUNDS; i++)
+    {
+        if (fgets(line, sizeof(line), ptr) == NULL)
+        {
+            perror("Error reading data line");
+            fclose(ptr);
+            return 1;
+        }
+        // Parse the line into the MutualFund structure
+        if (sscanf(line, "%49[^,],%4[^,],%f,%f,%f",
+                   funds[i].name,
+                   funds[i].ticker,
+                   &funds[i].oneYearReturn,
+                   &funds[i].threeYearReturn,
+                   &funds[i].fiveYearReturn) != 5)
+        {
+            fprintf(stderr, "Error parsing line: %s", line);
+            fclose(ptr);
+            return 1;
+        }
+    }
+
+    fclose(ptr);
+
+    // Print the data on console window
+    for (int i = 0; i < NUM_FUNDS; i++)
+    {
+        printf("Fund: %s\n", funds[i].name);
+        printf("Ticker: %s\n", funds[i].ticker);
+        printf("1-Year Return: %.2f%%\n", funds[i].oneYearReturn);
+        printf("3-Year Return: %.2f%%\n", funds[i].threeYearReturn);
+        printf("5-Year Return: %.2f%%\n", funds[i].fiveYearReturn);
+        printf("---------------------------\n");
+    }
+    
+    printf("\n\n");
+}
+
+// To calculate ROI
+
+void calclulate_ROI()
+{
+    printf("\n\n1.Motilal Oswal Midcap Fund\n2.Tata Digital India Fund\n3.SBI PSU Fund\n4.Axis Small Cap Fund\n");
+    printf("\nEnter your choice to Calculate ROI on above MutualFunds:");
+    int choice;
+    scanf("%d", &choice);
+    while (1)
+    {
+        float amount;
+        printf("Enter your amount:");
+        scanf("%f", &amount);
+        switch (choice)
+        {
+        case 1:
+            printf("\nReturns on Motilal Oswal Midcap Fund :\n");
+            printf("one year returns :%.4f\n", (amount * 64.48));
+            printf("Three year returns :%.4f\n", (amount * 38.12));
+            printf("Five year returns :%.4f\n", (amount * 36.16));
+            break;
+        case 2:
+            printf("\nReturns on Tata Digital India Fund :\n");
+            printf("one year returns :%.4f\n", (amount * 47.68));
+            printf("Three year returns :%.4f\n", (amount * 15.09));
+            printf("Five year returns :%.4f\n", (amount * 29.86));
+            break;
+        case 3:
+            printf("\nReturns on SBI PSU Fund :\n");
+            printf("one year returns :%.4f\n", (amount * 77.13));
+            printf("Three year returns :%.4f\n", (amount * 41.87));
+            printf("Five year returns :%.4f\n", (amount * 31.51));
+            break;
+        case 4:
+            printf("\nReturns on Axis Small Cap Fund :\n");
+            printf("one year returns :%.4f\n", (amount * 38.64));
+            printf("Three year returns :%.4f\n", (amount * 24.20));
+            printf("Five year returns :%.4f\n", (amount * 31.76));
+            break;
+        }
+    }
+    printf("\n\n");
+}
+
+//buy socks
+
+void buy(user *s, int num_user)
+{
+    char filename[100];
+    
+    // Ask the user to enter an existing filename
+    printf("Enter the username to access : ");
+    fgets(filename, sizeof(filename), stdin);
+    filename[strcspn(filename, "\n")] = 0; // Remove newline character from the filename input
+    
+    // Add ".csv" extension to the filename
+    snprintf(filename, sizeof(filename), "%s.csv", filename);
+
+    // Try to open the existing file
+    FILE *userFile = fopen(filename, "a");  
+    if (userFile == NULL)
+    {
+        printf("Error opening file: %s\n", filename);
+        return;
+    }
+
+    // Prompt for mutual fund options
+    printf("\n1. Motilal Oswal Midcap Fund\n2. Tata Digital India Fund\n3. SBI PSU Fund\n4. Axis Small Cap Fund\n");
+    printf("Enter fund number to buy: ");
+    int num;
+    scanf("%d", &num);
+    float amount;
+    printf("Enter your Amout:");
+    scanf("%f",&amount);
+
+    switch (num)
+    {
+        case 1:
+            fprintf(userFile, "Motilal Oswal Midcapfund,\t\t%.2f,\t%s,\t%s\n", amount, __TIME__, __DATE__);
+            break;
+        case 2:
+            fprintf(userFile, "Tata Digital India Fund,\t\t%.2f,\t%s,\t%s\n", amount,__TIME__, __DATE__);
+            break;
+        case 3:
+            fprintf(userFile, "SBI PSU Fund,\t\t\t%.2f,\t%s,\t%s\n", amount,__TIME__, __DATE__);
+            break;
+        case 4:
+            fprintf(userFile, "Axis Small Cap Fund,\t\t%.2f,\t%s,\t%s\n", amount, __TIME__, __DATE__);
+            break;
+        default:
+            printf("Invalid choice!\n");
+            fclose(userFile);
+    }
+
+    printf("Purchase recorded in file: %s\n", filename);
+    fclose(userFile);  
+    printf("\n\n");
+}
+
+//sell stock and display current holdings
+
+void sell(user *s, int num_user)
+{
+    char filename[100];
+    
+    // Ask the user to enter an existing filename
+    printf("Enter the username to access (without extension): ");
+    fgets(filename, sizeof(filename), stdin);
+    filename[strcspn(filename, "\n")] = 0; // Remove newline character from the filename input
+    
+    // Add ".csv" extension to the filename
+    snprintf(filename, sizeof(filename), "%s.csv", filename);
+
+    // Open the file for reading to check current holdings
+    FILE *userFile = fopen(filename, "r");
+    if (userFile == NULL)
+    {
+        printf("Error opening file: %s\n", filename);
+        return;
+    }
+
+    // Temporary buffer to hold lines, and array for the user's current holdings
+    char lines[MAX_LINE_LENGTH][MAX_LINE_LENGTH];
+    int lineCount = 0;
+    
+    // Read the current holdings from the file and store them in the array
+    while (fgets(lines[lineCount], sizeof(lines[lineCount]), userFile) != NULL)
+    {
+        lineCount++;
+    }
+    fclose(userFile);
+
+    // Display the current holdings to the user
+    printf("Current holdings:\n");
+    for (int i = 0; i < lineCount; i++)
+    {
+        printf("%d. %s", i + 1, lines[i]);  // Display the list of holdings
+    }
+
+    // Ask the user which stock to sell
+    int sellChoice;
+    printf("\nEnter the number of the fund to sell: ");
+    scanf("%d", &sellChoice);
+    getchar();  // To clear newline character from input buffer
+
+    // Validate the choice
+    if (sellChoice < 1 || sellChoice > lineCount)
+    {
+        printf("Invalid choice!\n");
+        return;
+    }
+
+    // Remove the selected stock from the holdings
+    for (int i = sellChoice - 1; i < lineCount - 1; i++)
+    {
+        strcpy(lines[i], lines[i + 1]);
+    }
+    lineCount--;  // Decrease the line count as one item has been removed
+
+    // Open the file for writing (overwrite)
+    userFile = fopen(filename, "w");
+    if (userFile == NULL)
+    {
+        printf("Error opening file: %s\n", filename);
+        return;
+    }
+
+    // Write the updated holdings back to the file
+    for (int i = 0; i < lineCount; i++)
+    {
+        fprintf(userFile, "%s", lines[i]);  // Write each line back to the file
+    }
+
+    fclose(userFile);  // Close the file after updating
+    printf("Fund sold successfully!\n");
+
+    printf("\n\n");
+}
+
+//to buy or sell stocks
+
+void buysell(user *s, int num_user)
+{
+    int bs;
+    printf("\n1. To Buy\n2. To Sell\n3. Exit\n");
+    printf("Enter your choice: ");
+    scanf("%d", &bs);
+    getchar();  
+
+    switch (bs)
+    {
+        case 1:
+            buy(s, num_user);
+            break;
+        case 2:
+            sell(s, num_user);
+            break;
+        case 3:
+            printf("Exiting...\n");
+            return;
+        default:
+            printf("Invalid choice! Try again.\n");
+            break;
+    }
+
+    printf("\n\n");
+}
+
+//To view your mutual funds
+
+void viewyourMF()
+{
+    char filename[20];
+    char line[256];
+    getchar();
+    printf("Enter file name:");
+    fgets(filename,sizeof(filename),stdin);
+    filename[strcspn(filename,"\n")]=0;
+
+    snprintf(filename,sizeof(filename),"%s.csv",filename);
+     FILE *userFile = fopen(filename, "r");
+    if (userFile == NULL)
+    {
+        printf("Error opening file: %s\n", filename);
+        return;
+    }
+    printf("\n\n");
+    while(fgets(line,sizeof(line),userFile))
+    {
+        printf("%s ",line);
+        printf("---------------------------------------------------------------------------------\n");
+
+    }
+
+    printf("\n\n");
+}
+
+int main()
+{
+    int num_user = 0;
+    user s[max_users];
+    MutualFund funds[NUM_FUNDS];
+    int ch, n;
+
+    // Load existing users from file
+    FILE *file = fopen("Userlist.csv", "r");
+    if (file != NULL)
+    {
+        char line[MAX_LINE_LENGTH];
+        fgets(line, sizeof(line), file); // Skip header
+        while (fgets(line, sizeof(line), file))
+        {
+            sscanf(line, "%d,%49[^,],%49[^\n]", &s[num_user].user_id, s[num_user].name, s[num_user].password);
+            num_user++;
+        }
+        fclose(file);
+    }
+
+    while (1)
+    {
+        printf("1.Add User\n2.View User List\n3.Remove User\n4.View Available Mutual Funds\n5.Calculate return in investment\n");
+        printf("6.to buy or sell MutualFunds\n7.view your dash board\n8.Exit\n");
+        printf("Enter your choice: ");
+        scanf("%d", &ch);
+        switch (ch)
+        {
+        case 1:
+            add_user(s, &num_user);
+            break;
+        case 2:
+            user_list();
+            break;
+        case 3:
+            printf("Enter user_ID to remove user: ");
+            scanf("%d", &n);
+            removeUser(s, &num_user, n);
+            break;
+        case 4:
+            ToviewMF(funds);
+            break;
+        case 5:
+            calclulate_ROI();
+            break;
+        case 6:
+            buysell(s, num_user);
+        case 7:
+            viewyourMF();
+            break;
+        case 8:
+            return 0;
+        }
+    }
+}

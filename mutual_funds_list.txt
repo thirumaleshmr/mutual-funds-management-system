@@ -1,0 +1,49 @@
+
+#include <stdio.h>
+#include <string.h>
+#define NUM_FUNDS 10
+
+// structure for mutual fund data
+typedef struct {
+    char name[50];
+    char ticker[10];  
+    float oneYearReturn;
+    float threeYearReturn;
+    float fiveYearReturn;
+} MutualFund;
+
+int main() {
+    // Create an array of MutualFund structures
+    MutualFund funds[NUM_FUNDS] = {
+        {"Motilal Oswal Midcap Fund", "MOMF", 64.48, 38.12, 36.16},
+        {"Tata Digital India Fund", "TDIF", 47.68, 15.09, 29.86},
+        {"SBI PSU Fund", "SBIP", 77.13, 41.87, 31.51},
+        {"Axis Small Cap Fund", "ASCF", 38.64, 24.20, 31.76},
+    };
+    
+    // Open a CSV file for writing
+    FILE *file = fopen("mutualfunds.csv", "w+");
+    if (file == NULL) {
+        perror("Failed to open file");
+        return 1;
+    }
+    
+    // Write the header line
+    fprintf(file, "Name,Ticker,1-Year Return,3-Year Return,5-Year Return\n");
+    
+    // Write data to the CSV file
+    for (int i = 0; i < NUM_FUNDS; i++) {
+        fprintf(file, "%s,%s,%.2f,%.2f,%.2f\n",
+                funds[i].name,
+                funds[i].ticker,
+                funds[i].oneYearReturn,
+                funds[i].threeYearReturn,
+                funds[i].fiveYearReturn);
+    }
+    
+    // Close the file
+    fclose(file);
+    printf("%d",NUM_FUNDS);
+    
+    return 0;
+}
